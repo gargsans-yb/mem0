@@ -13,7 +13,8 @@ class OpenAIEmbedding(EmbeddingBase):
         super().__init__(config)
 
         self.config.model = self.config.model or "text-embedding-3-small"
-        self.config.embedding_dims = self.config.embedding_dims or 1536
+        # self.config.embedding_dims = self.config.embedding_dims or 1536
+        self.config.embedding_dims = self.config.embedding_dims or 1024
 
         api_key = self.config.api_key or os.getenv("OPENAI_API_KEY")
         base_url = (
@@ -42,8 +43,16 @@ class OpenAIEmbedding(EmbeddingBase):
             list: The embedding vector.
         """
         text = text.replace("\n", " ")
-        return (
-            self.client.embeddings.create(input=[text], model=self.config.model, dimensions=self.config.embedding_dims)
-            .data[0]
-            .embedding
-        )
+
+        if self.config.model == "text-embedding-3-small":
+            return (
+                self.client.embeddings.create(input=[text], model=self.config.model, dimensions=self.config.embedding_dims)
+                .data[0]
+                .embedding
+            )
+        else:
+            return (
+                self.client.embeddings.create(input=[text], model=self.config.model)
+                .data[0]
+                .embedding
+            )

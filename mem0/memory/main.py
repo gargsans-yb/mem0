@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 import uuid
 import warnings
 from copy import deepcopy
@@ -327,14 +328,13 @@ class Memory(MemoryBase):
             LLMError: If LLM operations fail.
             DatabaseError: If database operations fail.
         """
-
+        start_time = time.time()
         processed_metadata, effective_filters = _build_filters_and_metadata(
             user_id=user_id,
             agent_id=agent_id,
             run_id=run_id,
             input_metadata=metadata,
         )
-
         if memory_type is not None and memory_type != MemoryType.PROCEDURAL.value:
             raise Mem0ValidationError(
                 message=f"Invalid 'memory_type'. Please pass {MemoryType.PROCEDURAL.value} to create procedural memories.",
@@ -342,7 +342,6 @@ class Memory(MemoryBase):
                 details={"provided_type": memory_type, "valid_type": MemoryType.PROCEDURAL.value},
                 suggestion=f"Use '{MemoryType.PROCEDURAL.value}' to create procedural memories."
             )
-
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
@@ -356,16 +355,13 @@ class Memory(MemoryBase):
                 details={"provided_type": type(messages).__name__, "valid_types": ["str", "dict", "list[dict]"]},
                 suggestion="Convert your input to a string, dictionary, or list of dictionaries."
             )
-
         if agent_id is not None and memory_type == MemoryType.PROCEDURAL.value:
             results = self._create_procedural_memory(messages, metadata=processed_metadata, prompt=prompt)
             return results
-
         if self.config.llm.config.get("enable_vision"):
             messages = parse_vision_messages(messages, self.llm, self.config.llm.config.get("vision_details"))
         else:
             messages = parse_vision_messages(messages)
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future1 = executor.submit(self._add_to_vector_store, messages, processed_metadata, effective_filters, infer)
             future2 = executor.submit(self._add_to_graph, messages, effective_filters)
@@ -374,13 +370,12 @@ class Memory(MemoryBase):
 
             vector_store_result = future1.result()
             graph_result = future2.result()
-
         if self.enable_graph:
+            print(f"Total return time: {time.time() - start_time:.2f} seconds")
             return {
                 "results": vector_store_result,
                 "relations": graph_result,
             }
-
         return {"results": vector_store_result}
 
     def _add_to_vector_store(self, messages, metadata, filters, infer):
@@ -599,12 +594,14 @@ class Memory(MemoryBase):
     def _add_to_graph(self, messages, filters):
         added_entities = []
         if self.enable_graph:
+            current_time = time.time()
             if filters.get("user_id") is None:
                 filters["user_id"] = "user"
 
             data = "\n".join([msg["content"] for msg in messages if "content" in msg and msg["role"] != "system"])
             added_entities = self.graph.add(data, filters)
 
+        print(f"Total graph add time: {time.time() - current_time:.2f} seconds")
         return added_entities
 
     def get(self, memory_id):
